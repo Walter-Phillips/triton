@@ -1,16 +1,16 @@
 use fuels::accounts::provider::Provider;
 use fuels::accounts::wallet::WalletUnlocked;
-// use chrono::Utc;
 use log::{error, info};
-use trigon::recon::{stream_mira_events_pangea, sync_state};
-use trigon::types::Event;
+use triton::calc::find_optimal_cycles;
+use triton::recon::{stream_mira_events_pangea, sync_state};
+use triton::types::Event;
 
 #[tokio::main]
 async fn main() {
     info!("Starting Triton Arbitrage bot");
     let (tx, rx) = crossbeam_channel::unbounded::<Event>();
 
-    let mut triton = trigon::triton::Triton::new();
+    let mut triton = triton::triton::Triton::new();
     println!("triton: {:?}", triton.cycles.len());
     // Spawn a task to stream Mira events
     let wallet = WalletUnlocked::new_from_private_key(
@@ -32,5 +32,10 @@ async fn main() {
     loop {
         let event = rx.recv().unwrap();
         triton.process_event(event);
+        println!("triton: {:?}", triton.cycles.len());
+        let cycles = find_optimal_cycles(&mut triton);
+        for cycle in cycles {
+            println!("Cycles:{:?}", cycle);
+        }
     }
 }

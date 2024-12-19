@@ -1,5 +1,6 @@
 use crate::types::Pool;
 use fuels::types::{AssetId, U256};
+use pangea_client::core::types::fuel;
 
 use std::str::FromStr;
 
@@ -28,6 +29,7 @@ pub fn get_pools() -> Vec<Pool> {
     let usdf_asset_id =
         AssetId::from_str("0x33a6d90877f12c7954cca6d65587c25e9214c7bed2231c188981c7114c1bdb78")
             .unwrap();
+    let fuel_asset_id = AssetId::from_str("0x1d5d97005e41cae2187a895fd8eab0506111e0e2f3331cd3912c15c24e3c1d82").unwrap();
     vec![
         Pool {
             pool_name: "WETH/ETH",
@@ -97,6 +99,22 @@ pub fn get_pools() -> Vec<Pool> {
             pool_name: "USDC/ezETH",
             from: usdc_asset_id,
             to: ezeth_asset_id,
+            reserve_0: U256::from(0),
+            reserve_1: U256::from(0),
+            fee_rate: U256::from(300),
+        },
+        Pool {
+            pool_name: "FUEL/ETH",
+            from: fuel_asset_id,
+            to: eth_asset_id,
+            reserve_0: U256::from(0),
+            reserve_1: U256::from(0),
+            fee_rate: U256::from(300),
+        },
+        Pool {
+            pool_name: "FUEL/USDC",
+            from: fuel_asset_id,
+            to: usdc_asset_id,
             reserve_0: U256::from(0),
             reserve_1: U256::from(0),
             fee_rate: U256::from(300),

@@ -5,6 +5,7 @@ use crate::{
 use fuels::types::{AssetId, U256};
 use mira_v1::interface::PoolId;
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
     str::FromStr,
 };
@@ -27,7 +28,7 @@ pub struct Triton {
     // Reverse mapping of PoolId top Index
     pub pool_id_mapping: HashMap<PoolId, usize>,
     // Mapping of index to Pool
-    pub pools: HashMap<usize, Pool>,
+    pub pools: HashMap<usize, RefCell<Pool>>,
     // Viable cycles found on startup
     pub cycles: Vec<Cycle>,
 }
@@ -52,7 +53,7 @@ impl Triton {
             let pool_id = (pair.from, pair.to, is_stable);
             index_mapping.insert(index, pool_id);
             pool_id_mapping.insert(pool_id, index);
-            pools.insert(index, pair);
+            pools.insert(index, RefCell::new(pair));
 
             let indexed_pair = IndexedPair {
                 index: *pool_id_mapping.get(&pool_id).unwrap(),
@@ -142,120 +143,176 @@ impl Triton {
         cycles_copy
     }
 
-    pub fn process_event(&mut self, event: Event) {
+    pub fn check_if_we_have_pool(
+        pool_id: &PoolId,
+        pool_id_mapping: &HashMap<PoolId, usize>,
+    ) -> bool {
+        pool_id_mapping.contains_key(pool_id)
+    }
+
+    fn handle_event_if_pool_exists<F>(&self, pool_id: (AssetId, AssetId, bool), event_handler: F)
+    where
+        F: FnOnce(),
+    {
+        if Triton::check_if_we_have_pool(&pool_id, &self.pool_id_mapping) {
+            event_handler();
+        }
+    }
+    pub fn process_event(&self, event: Event) {
         match event {
             Event::MiraSwap(event) => {
-                self.handle_swap(&event);
+                let pool_id = (
+                    AssetId::from_str(&event.pool_id.0.bits).expect("no asset id"),
+                    AssetId::from_str(&event.pool_id.1.bits).expect("no asset id"),
+                    event.pool_id.2,
+                );
+                let handler = || self.handle_swap(&event);
+                self.handle_event_if_pool_exists(pool_id, handler);
             }
             Event::MiraMint(event) => {
-                println!("Received MiraMint event: {event:?}");
+                let pool_id = (
+                    AssetId::from_str(&event.pool_id.0.bits).expect("no asset id"),
+                    AssetId::from_str(&event.pool_id.1.bits).expect("no asset id"),
+                    event.pool_id.2,
+                );
+                let handler = || self.handle_mint(&event);
+                self.handle_event_if_pool_exists(pool_id, handler);
             }
             Event::MiraBurn(event) => {
-                println!("Received MiraBurn event: {event:?}");
+                let pool_id = (
+                    AssetId::from_str(&event.pool_id.0.bits).expect("no asset id"),
+                    AssetId::from_str(&event.pool_id.1.bits).expect("no asset id"),
+                    event.pool_id.2,
+                );
+                let handler = || self.handle_burn(&event);
+                self.handle_event_if_pool_exists(pool_id, handler);
             }
         }
     }
 
-    pub fn handle_swap(&mut self, event: &SwapEventWithTx) {
+    pub fn handle_swap(&self, event: &SwapEventWithTx) {
         let pool_id = (
             AssetId::from_str(&event.pool_id.0.bits).expect("no asset id"),
             AssetId::from_str(&event.pool_id.1.bits).expect("no asset id"),
             event.pool_id.2,
         );
         let index = self.pool_id_mapping.get(&pool_id).expect("Pool not found");
-        let pool = self.pools.get_mut(index).expect("Pool not found");
+        let pool = self.pools.get(index).expect("Pool not found");
 
-        println!(
+        log::debug!(
             "Before swap - Pool {:?} state: reserve_0={}, reserve_1={}",
-            event.pool_id, pool.reserve_0, pool.reserve_1
+            event.pool_id,
+            pool.borrow().reserve_0,
+            pool.borrow().reserve_1
         );
 
-        pool.reserve_0 = pool
-            .reserve_0
-            .checked_add(event.asset_0_in.into())
-            .and_then(|x| x.checked_sub(event.asset_0_out.into()))
-            .expect("Can't add or subtract");
+        {
+            // Create a block to scope the immutable borrow
+            let current_reserve_0 = pool.borrow().reserve_0;
+            let new_reserve_0 = current_reserve_0
+                .checked_add(event.asset_0_in.into())
+                .and_then(|x| x.checked_sub(event.asset_0_out.into()))
+                .expect("Can't add or subtract");
 
-        pool.reserve_1 = pool
-            .reserve_1
-            .checked_add(event.asset_1_in.into())
-            .and_then(|x| x.checked_sub(event.asset_1_out.into()))
-            .expect("Can't add or subtract");
+            let current_reserve_1 = pool.borrow().reserve_1;
+            let new_reserve_1 = current_reserve_1
+                .checked_add(event.asset_1_in.into())
+                .and_then(|x| x.checked_sub(event.asset_1_out.into()))
+                .unwrap();
 
-        println!(
+            // Now perform the mutable borrow
+            let mut pool_mut = pool.borrow_mut();
+            pool_mut.reserve_0 = new_reserve_0;
+            pool_mut.reserve_1 = new_reserve_1;
+        }
+        log::debug!(
             "After swap - Pool {:?} state: reserve_0={}, reserve_1={}\nSwap details: in_0={}, in_1={}, out_0={}, out_1={}",
             event.pool_id,
-            pool.reserve_0,
-            pool.reserve_1,
+            pool.borrow().reserve_0,
+            pool.borrow().reserve_1,
             event.asset_0_in,
             event.asset_1_in,
             event.asset_0_out,
             event.asset_1_out
         );
     }
-    pub fn handle_mint(&mut self, event: &MintEventWithTx) {
+    pub fn handle_mint(&self, event: &MintEventWithTx) {
         let pool_id = (
             AssetId::from_str(&event.pool_id.0.bits).expect("no asset id"),
             AssetId::from_str(&event.pool_id.1.bits).expect("no asset id"),
             event.pool_id.2,
         );
         let index = self.pool_id_mapping.get(&pool_id).expect("Pool not found");
-        let pool = self.pools.get_mut(index).expect("Pool not found");
+        let pool = self.pools.get(index).expect("Pool not found");
 
-        println!(
+        log::debug!(
             "Before mint - Pool {:?} state: reserve_0={}, reserve_1={}",
-            event.pool_id, pool.reserve_0, pool.reserve_1
+            event.pool_id,
+            pool.borrow().reserve_0,
+            pool.borrow().reserve_1
         );
 
-        pool.reserve_0 = pool
-            .reserve_0
-            .checked_add(event.asset_0_in.into())
-            .expect("Can't add");
+        {
+            let current_reserve_0 = pool.borrow().reserve_0;
+            let new_reserve_0 = current_reserve_0
+                .checked_add(event.asset_0_in.into())
+                .expect("Can't add");
 
-        pool.reserve_1 = pool
-            .reserve_1
-            .checked_add(event.asset_1_in.into())
-            .expect("Can't add");
+            let current_reserve_1 = pool.borrow().reserve_1;
+            let new_reserve_1 = current_reserve_1
+                .checked_add(event.asset_1_in.into())
+                .expect("Can't add");
 
-        println!(
+            let mut pool_mut = pool.borrow_mut();
+            pool_mut.reserve_0 = new_reserve_0;
+            pool_mut.reserve_1 = new_reserve_1;
+        }
+        log::debug!(
         "After mint - Pool {:?} state: reserve_0={}, reserve_1={}\nMint details: in_0={}, in_1={}, liquidity={}",
         event.pool_id,
-        pool.reserve_0,
-        pool.reserve_1,
+        pool.borrow().reserve_0,
+        pool.borrow().reserve_1,
         event.asset_0_in,
         event.asset_1_in,
         event.liquidity.amount
     );
     }
-    pub fn handle_burn(&mut self, event: &BurnEventWithTx) {
+    pub fn handle_burn(&self, event: &BurnEventWithTx) {
         let pool_id = (
             AssetId::from_str(&event.pool_id.0.bits).expect("no asset id"),
             AssetId::from_str(&event.pool_id.1.bits).expect("no asset id"),
             event.pool_id.2,
         );
         let index = self.pool_id_mapping.get(&pool_id).expect("Pool not found");
-        let pool = self.pools.get_mut(index).expect("Pool not found");
+        let pool = self.pools.get(index).expect("Pool not found");
 
-        println!(
+        log::debug!(
             "Before burn - Pool {:?} state: reserve_0={}, reserve_1={}",
-            event.pool_id, pool.reserve_0, pool.reserve_1
+            event.pool_id,
+            pool.borrow().reserve_0,
+            pool.borrow().reserve_1
         );
 
-        pool.reserve_0 = pool
-            .reserve_0
-            .checked_sub(event.asset_0_out.into())
-            .expect("Can't subtract");
+        {
+            let current_reserve_0 = pool.borrow().reserve_0;
+            let new_reserve_0 = current_reserve_0
+                .checked_sub(event.asset_0_out.into())
+                .expect("Can't subtract");
 
-        pool.reserve_1 = pool
-            .reserve_1
-            .checked_sub(event.asset_1_out.into())
-            .expect("Can't subtract");
+            let current_reserve_1 = pool.borrow().reserve_1;
+            let new_reserve_1 = current_reserve_1
+                .checked_sub(event.asset_1_out.into())
+                .expect("Can't subtract");
 
-        println!(
+            let mut pool_mut = pool.borrow_mut();
+            pool_mut.reserve_0 = new_reserve_0;
+            pool_mut.reserve_1 = new_reserve_1;
+        }
+        log::debug!(
                 "After burn - Pool {:?} state: reserve_0={}, reserve_1={}\nBurn details: out_0={}, out_1={}, liquidity={}",
                 event.pool_id,
-                pool.reserve_0,
-                pool.reserve_1,
+                pool.borrow().reserve_0,
+                pool.borrow().reserve_1,
                 event.asset_0_out,
                 event.asset_1_out,
                 event.liquidity.amount

@@ -1,5 +1,5 @@
 [package]
-name = "trigon"
+name = "triton"
 version = "0.1.0"
 edition = "2021"
 
@@ -26,6 +26,5 @@ anyhow = "1.0.94"
 # Mira Bindings
 mira-v1 = { git = "https://github.com/mira-amm/mira-v1-rs" }
 lazy_static = "1.5.0"
-
-
-
+alloy-primitives = "0.8.15"
+ethers = "2.0.14"

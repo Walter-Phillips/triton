@@ -131,6 +131,8 @@ pub async fn sync_state(triton: &mut triton::Triton, wallet: WalletUnlocked) {
     // Get pool IDs and add them to pool manager
     let pools = get_pools();
 
+    println!("pools: {:#?}", pools.len());
+
     for pool in pools.iter() {
         let fee_call_handler = contract_methods
             .fees()
@@ -156,6 +158,8 @@ pub async fn sync_state(triton: &mut triton::Triton, wallet: WalletUnlocked) {
         Option<PoolMetadata>,
         Option<PoolMetadata>,
         Option<PoolMetadata>,
+        Option<PoolMetadata>,
+        Option<PoolMetadata>,
     )> = metadata_multi_call_handler
         .simulate(Execution::StateReadOnly)
         .await
@@ -163,6 +167,8 @@ pub async fn sync_state(triton: &mut triton::Triton, wallet: WalletUnlocked) {
 
     // Execute multicall
     let fee_results: CallResponse<(
+        (u64, u64, u64, u64),
+        (u64, u64, u64, u64),
         (u64, u64, u64, u64),
         (u64, u64, u64, u64),
         (u64, u64, u64, u64),
@@ -187,6 +193,9 @@ pub async fn sync_state(triton: &mut triton::Triton, wallet: WalletUnlocked) {
         metadata_results.value.5,
         metadata_results.value.6,
         metadata_results.value.7,
+        metadata_results.value.8,
+        metadata_results.value.9,
+        metadata_results.value.10,
     ];
 
     let fee_vec = vec![
@@ -198,6 +207,9 @@ pub async fn sync_state(triton: &mut triton::Triton, wallet: WalletUnlocked) {
         fee_results.value.5,
         fee_results.value.6,
         fee_results.value.7,
+        fee_results.value.8,
+        fee_results.value.9,
+        fee_results.value.10,
     ];
 
     println!("metadata_vec: {:?}", metadata_vec);
@@ -212,8 +224,8 @@ pub async fn sync_state(triton: &mut triton::Triton, wallet: WalletUnlocked) {
         let pool = &pools[i];
         if let Some(metadata) = metadata_opt {
             if let Some(pool) = triton.pools.get_mut(&i) {
-                pool.reserve_0 = fuels::types::U256::from(metadata.reserve_0);
-                pool.reserve_1 = fuels::types::U256::from(metadata.reserve_1);
+                pool.borrow_mut().reserve_0 = fuels::types::U256::from(metadata.reserve_0);
+                pool.borrow_mut().reserve_1 = fuels::types::U256::from(metadata.reserve_1);
             }
         }
     }
