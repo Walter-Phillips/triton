@@ -1,7 +1,13 @@
+use std::str::FromStr;
+
+use ethers::contract;
 use fuels::accounts::provider::Provider;
 use fuels::accounts::wallet::WalletUnlocked;
+use fuels::types::ContractId;
 use log::{error, info};
+use triton::bundle;
 use triton::calc::find_optimal_cycles;
+use triton::constants::CONTRACT_ID;
 use triton::recon::{stream_mira_events_pangea, sync_state};
 use triton::types::Event;
 
@@ -19,8 +25,9 @@ async fn main() {
             .unwrap(),
         Some(Provider::connect("mainnet.fuel.network").await.unwrap()),
     );
+    let contract_id = ContractId::from_str(CONTRACT_ID).unwrap();
 
-    sync_state(&mut triton, wallet).await;
+    sync_state(&mut triton, wallet.clone()).await;
     let event_tx = tx.clone();
     info!("Starting Mira event stream");
     tokio::spawn(async move {
@@ -32,10 +39,17 @@ async fn main() {
     loop {
         let event = rx.recv().unwrap();
         triton.process_event(event);
+        let now = std::time::Instant::now();
         println!("triton: {:?}", triton.cycles.len());
         let cycles = find_optimal_cycles(&mut triton);
-        for cycle in cycles {
-            println!("Cycles:{:?}", cycle);
+        let elapsed = now.elapsed().as_millis();
+        println!("Cycle finding took {}ms", elapsed);
+        if !cycles.is_empty() {
+            println!(
+                "Most profitable cycle: {:?} profit as u64: {:?}",
+                cycles[0],
+                cycles[0].profit.as_u64()
+            );
         }
     }
 }
