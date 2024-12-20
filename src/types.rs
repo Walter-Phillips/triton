@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
-use fuels::types::{Address, AssetId, ContractId, Identity, U256};
+use ethers::types::U256;
+use fuels::types::{Address, AssetId, ContractId, Identity};
 use serde::de::{self, Deserializer};
 use serde::Deserialize;
 #[derive(Debug)]

@@ -11,13 +11,14 @@ use crate::{
 };
 use chrono::Local;
 use crossbeam_channel::Sender;
+use ethers::types::U256;
 use fuels::{
     accounts::{impersonated_account::ImpersonatedAccount, wallet::WalletUnlocked},
     programs::{
         calls::{CallHandler, Execution},
         responses::CallResponse,
     },
-    types::{transaction::TxPolicies, U256},
+    types::transaction::TxPolicies,
 };
 use futures::StreamExt;
 use mira_v1::interface::PoolMetadata;
@@ -224,8 +225,8 @@ pub async fn sync_state(triton: &mut triton::Triton, wallet: WalletUnlocked) {
         let pool = &pools[i];
         if let Some(metadata) = metadata_opt {
             if let Some(pool) = triton.pools.get_mut(&i) {
-                pool.borrow_mut().reserve_0 = fuels::types::U256::from(metadata.reserve_0);
-                pool.borrow_mut().reserve_1 = fuels::types::U256::from(metadata.reserve_1);
+                pool.borrow_mut().reserve_0 = U256::from(metadata.reserve_0);
+                pool.borrow_mut().reserve_1 = U256::from(metadata.reserve_1);
             }
         }
     }

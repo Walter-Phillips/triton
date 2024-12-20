@@ -1,9 +1,9 @@
-use std::{cell::RefCell, cmp::Ordering, str::FromStr};
-use fuels::types::{AssetId, U256};
+use fuels::types::AssetId;
 use serde::Deserialize;
+use std::{cell::RefCell, cmp::Ordering, str::FromStr};
 // use alloy_primitives::I256;
-use ethers::types::I256;
 use crate::types::Pool;
+use ethers::types::{I256, U256};
 
 #[derive(Debug, Deserialize)]
 pub struct NetPositiveCycle {
@@ -41,6 +41,7 @@ pub fn find_optimal_cycles(triton: &mut crate::triton::Triton) -> Vec<NetPositiv
 
     let mut net_profit_cycles = Vec::new();
     for cycle in &triton.cycles {
+        println!("cycle: {:#?}", cycle);
         let pairs = cycle
             .cycle
             .iter()
@@ -53,9 +54,9 @@ pub fn find_optimal_cycles(triton: &mut crate::triton::Triton) -> Vec<NetPositiv
 
         log::debug!("maximizing profit");
         let optimal = maximize_profit(
-            U256::one(),
+            U256::from("1000000"),
             U256::from_dec_str("10000000000000000000000").unwrap(),
-            U256::from_dec_str("10").unwrap(),
+            U256::from_dec_str("1000").unwrap(),
             profit_function,
         );
 
@@ -82,23 +83,34 @@ pub fn find_optimal_cycles(triton: &mut crate::triton::Triton) -> Vec<NetPositiv
     net_profit_cycles.into_iter().take(5).collect()
 }
 
-// Quadratic search
 fn maximize_profit(
     mut domain_min: U256,
     mut domain_max: U256,
     lowest_delta: U256,
     f: impl Fn(U256) -> I256,
 ) -> U256 {
+    let mut best_amount = domain_min;
+    let mut best_profit = f(domain_min);
+
     loop {
         if domain_max > domain_min {
             if (domain_max - domain_min) > lowest_delta {
                 let mid = (domain_min + domain_max) / 2;
-
                 let lower_mid = (mid + domain_min) / 2;
                 let upper_mid = (mid + domain_max) / 2;
 
                 let f_output_lower = f(lower_mid);
                 let f_output_upper = f(upper_mid);
+
+                // Store best result seen so far
+                if f_output_lower > best_profit {
+                    best_profit = f_output_lower;
+                    best_amount = lower_mid;
+                }
+                if f_output_upper > best_profit {
+                    best_profit = f_output_upper;
+                    best_amount = upper_mid;
+                }
 
                 if f_output_lower > f_output_upper {
                     domain_max = mid;
@@ -113,8 +125,7 @@ fn maximize_profit(
         }
     }
 
-    log::debug!("domain_min: {}, domain_max: {}", domain_min, domain_max);
-    (domain_max + domain_min) / 2
+    best_amount
 }
 
 pub fn get_profit_with_amount(
@@ -124,20 +135,27 @@ pub fn get_profit_with_amount(
 ) -> (I256, Vec<U256>) {
     let mut amount_out: U256 = amount_in;
     let mut token_in = token_in;
-    let mut amounts = Vec::with_capacity(pairs.len() + 1);
-    amounts.push(amount_in);
-    for pair in pairs {
+    let mut amounts = vec![amount_in]; // Track all amounts through the cycle
+
+    for (i, pair) in pairs.iter().enumerate() {
         let pair = pair.borrow();
-        let fees;
+        let fees = pair.fee_rate;
         let (reserve0, reserve1) = if pair.to == token_in {
-            fees = pair.fee_rate;
             (pair.reserve_0, pair.reserve_1)
         } else {
-            fees = pair.fee_rate;
             (pair.reserve_1, pair.reserve_0)
         };
-        amount_out = get_amount_out(amount_out, reserve0, reserve1, fees, U256::from(0));
+
+        println!(
+            "Swap {}: amount_in={}, reserves=({}, {}), fees={}, token_in={}",
+            i + 1, amount_out, reserve0, reserve1, fees, token_in
+        );
+
+        amount_out = get_amount_out_with_saturation(amount_out, reserve0, reserve1, fees);
         amounts.push(amount_out);
+
+        println!("Swap {} output: {}", i + 1, amount_out);
+
         token_in = if pair.to == token_in {
             pair.from
         } else {
@@ -145,35 +163,50 @@ pub fn get_profit_with_amount(
         };
     }
 
-    let binding = amount_out.to_string();
-    let amount_out_as_str = binding.as_str();
-    let binding = amount_in.to_string();
-    let amount_in_as_str = binding.as_str();
+    let profit = if amount_out >= amount_in {
+        let profit = amount_out.saturating_sub(amount_in);
+        if let Some(i256_value) = I256::try_from(profit).ok() {
+            i256_value
+        } else {
+            I256::MAX
+        }
+    } else {
+        let loss = amount_in.saturating_sub(amount_out);
+        if let Some(i256_value) = I256::try_from(loss).ok() {
+            -i256_value
+        } else {
+            I256::MIN
+        }
+    };
 
-    (    I256::from_str(amount_out_as_str).unwrap() - I256::from_str(amount_in_as_str).unwrap(), amounts)
+    println!("Profit calculation with amounts: amounts={:?}, profit={}", amounts, profit);
+    (profit, amounts)
 }
 
 pub fn get_profit(token_in: AssetId, amount_in: U256, pairs: &Vec<&RefCell<Pool>>) -> I256 {
     let mut amount_out: U256 = amount_in;
     let mut token_in = token_in;
+    let mut amounts = vec![amount_in];  // Track all amounts through the cycle
 
-    for pair in pairs {
+    for (i, pair) in pairs.iter().enumerate() {
         let pair = pair.borrow();
-        let fees;
+        let fees = pair.fee_rate;
         let (reserve0, reserve1) = if pair.to == token_in {
-            fees = pair.fee_rate;
             (pair.reserve_0, pair.reserve_1)
         } else {
-            fees = pair.fee_rate;
             (pair.reserve_1, pair.reserve_0)
         };
 
-        log::debug!(
-            "amount_out: {}, reserve0: {}, reserve1: {}, fees: {}",
-            amount_out, reserve0, reserve1, fees
-        );
+        // println!(
+        //     "Swap {}: amount_in={}, reserves=({}, {}), fees={}, token_in={}",
+        //     i + 1, amount_out, reserve0, reserve1, fees, token_in
+        // );
 
         amount_out = get_amount_out_with_saturation(amount_out, reserve0, reserve1, fees);
+        amounts.push(amount_out);
+
+        // println!("Swap {} output: {}", i + 1, amount_out);
+
         token_in = if pair.to == token_in {
             pair.from
         } else {
@@ -181,12 +214,24 @@ pub fn get_profit(token_in: AssetId, amount_in: U256, pairs: &Vec<&RefCell<Pool>
         };
     }
 
-    log::debug!("Final amount_out: {}, amount_in: {}", amount_out, amount_in);
-    let binding = amount_out.to_string();
-    let amount_out_as_str = binding.as_str();
-    let binding = amount_in.to_string();
-    let amount_in_as_str = binding.as_str();
-    I256::from_str(amount_out_as_str).unwrap() - I256::from_str(amount_in_as_str).unwrap()
+    let profit = if amount_out >= amount_in {
+        let profit = amount_out.saturating_sub(amount_in);
+        if let Some(i256_value) = I256::try_from(profit).ok() {
+            i256_value
+        } else {
+            I256::MAX
+        }
+    } else {
+        let loss = amount_in.saturating_sub(amount_out);
+        if let Some(i256_value) = I256::try_from(loss).ok() {
+            -i256_value
+        } else {
+            I256::MIN
+        }
+    };
+
+    println!("Profit calculation: amounts={:?}, profit={}", amounts, profit);
+    profit
 }
 
 pub fn get_amount_out(
@@ -217,18 +262,31 @@ fn get_amount_out_with_saturation(
         return U256::zero();
     }
 
-    let fee_denominator = U256::from(1000);
+    // Scale up the calculations to preserve precision
+    let scale = U256::from(1_000_000); // Use 1M as scaling factor
+    let fee_denominator = U256::from(1000000);
+    
+    // Calculate fee with scaling
+    let scaled_amount = amount_in.saturating_mul(scale);
+    let amount_fee = scaled_amount.saturating_mul(fee_rate) / fee_denominator;
+    let effective_amount_in = scaled_amount.saturating_sub(amount_fee);
 
-    // Use saturating arithmetic
-    let amount_fee = amount_in.saturating_mul(fee_rate) / fee_denominator;
-    let effective_amount_in = amount_in.saturating_sub(amount_fee);
-
+    // Calculate output with scaling
     let numerator = effective_amount_in.saturating_mul(reserve_out);
-    let denominator = reserve_in.saturating_add(effective_amount_in);
+    let denominator = reserve_in.saturating_mul(scale).saturating_add(effective_amount_in);
 
     if denominator == U256::zero() {
         return U256::zero();
     }
 
-    numerator / denominator
+    // Unscale the result
+    let result = numerator / denominator;
+    
+    // Add debug logging
+    // println!(
+    //     "Swap calculation: amount_in={}, effective_amount={}, result={}",
+    //     amount_in, effective_amount_in, result
+    // );
+
+    result
 }

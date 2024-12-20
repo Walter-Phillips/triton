@@ -2,7 +2,8 @@ use crate::{
     tokens::get_pools,
     types::{BurnEventWithTx, Event, MintEventWithTx, Pool, SwapEventWithTx},
 };
-use fuels::types::{AssetId, U256};
+use ethers::types::U256;
+use fuels::types::AssetId;
 use mira_v1::interface::PoolId;
 use std::{
     cell::RefCell,
