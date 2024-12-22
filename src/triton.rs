@@ -22,8 +22,6 @@ pub struct Cycle {
 }
 #[derive(Debug)]
 pub struct Triton {
-    // // Pangea Client
-    // pub pangea_client: pangea_client::Client<WsProvider>,
     // Mapping from index to PoolId
     pub index_mapping: HashMap<usize, PoolId>,
     // Reverse mapping of PoolId top Index
@@ -71,13 +69,19 @@ impl Triton {
 
         // Going through ETH atm change to USDC later
         let usdc_asset_id =
+            AssetId::from_str("0x286c479da40dc953bddc3bb4c453b608bba2e0ac483b077bd475174115395e6b")
+                .unwrap();
+        let fuel_asset_id =
+            AssetId::from_str("0x1d5d97005e41cae2187a895fd8eab0506111e0e2f3331cd3912c15c24e3c1d82")
+                .unwrap();
+        let eth_asset_id =
             AssetId::from_str("0xf8f8b6283d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07")
                 .unwrap();
         // We call find_cycles to find triangular arbitrage cycles (USDC to USDC, for example)
         cycles = Triton::find_cycles(
             &indexed_pairs,
-            usdc_asset_id, // Starting token
-            usdc_asset_id, // Target token
+            fuel_asset_id, // Starting token
+            eth_asset_id, // Target token
             5,             // Maximum hops (for triangular arbitrage)
             &Vec::new(),
             &mut cycles,
@@ -125,7 +129,10 @@ impl Triton {
             if temp_out == token_out {
                 let mut new_cycle = current_pairs.clone();
                 new_cycle.push(*pair);
-                cycles_copy.push(Cycle { cycle: new_cycle });
+                if new_cycle.len() > 1 {
+                    // Prevent single-pool cycles
+                    cycles_copy.push(Cycle { cycle: new_cycle });
+                }
             } else if max_hops > 1 {
                 let mut new_pairs = current_pairs.clone();
                 new_pairs.push(*pair);

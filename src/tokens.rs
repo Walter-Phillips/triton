@@ -38,7 +38,7 @@ pub fn get_pools() -> Vec<Pool> {
             to: eth_asset_id,
             reserve_0: U256::from(0),
             reserve_1: U256::from(0),
-            fee_rate: U256::from(50),
+            fee_rate: U256::from(5),
         },
         Pool {
             pool_name: "USDC/USDT",
@@ -46,7 +46,7 @@ pub fn get_pools() -> Vec<Pool> {
             to: usdt_asset_id,
             reserve_0: U256::from(0),
             reserve_1: U256::from(0),
-            fee_rate: U256::from(50),
+            fee_rate: U256::from(5),
         },
         Pool {
             pool_name: "ezETH/ETH",
@@ -54,7 +54,7 @@ pub fn get_pools() -> Vec<Pool> {
             to: eth_asset_id,
             reserve_0: U256::from(0),
             reserve_1: U256::from(0),
-            fee_rate: U256::from(50),
+            fee_rate: U256::from(5),
         },
         Pool {
             pool_name: "pzETH/ETH",
@@ -62,7 +62,7 @@ pub fn get_pools() -> Vec<Pool> {
             to: eth_asset_id,
             reserve_0: U256::from(0),
             reserve_1: U256::from(0),
-            fee_rate: U256::from(50),
+            fee_rate: U256::from(5),
         },
         Pool {
             pool_name: "weETH/ETH",
@@ -70,7 +70,7 @@ pub fn get_pools() -> Vec<Pool> {
             to: eth_asset_id,
             reserve_0: U256::from(0),
             reserve_1: U256::from(0),
-            fee_rate: U256::from(50),
+            fee_rate: U256::from(5),
         },
         Pool {
             pool_name: "USDC/USDF",
@@ -78,7 +78,7 @@ pub fn get_pools() -> Vec<Pool> {
             to: usdf_asset_id,
             reserve_0: U256::from(0),
             reserve_1: U256::from(0),
-            fee_rate: U256::from(50),
+            fee_rate: U256::from(5),
         },
         Pool {
             pool_name: "USDC/ETH",
@@ -86,7 +86,7 @@ pub fn get_pools() -> Vec<Pool> {
             to: eth_asset_id,
             reserve_0: U256::from(0),
             reserve_1: U256::from(0),
-            fee_rate: U256::from(300),
+            fee_rate: U256::from(30),
         },
         Pool {
             pool_name: "USDT/ETH",
@@ -94,7 +94,7 @@ pub fn get_pools() -> Vec<Pool> {
             to: eth_asset_id,
             reserve_0: U256::from(0),
             reserve_1: U256::from(0),
-            fee_rate: U256::from(300),
+            fee_rate: U256::from(30),
         },
         Pool {
             pool_name: "USDC/ezETH",
@@ -102,7 +102,7 @@ pub fn get_pools() -> Vec<Pool> {
             to: ezeth_asset_id,
             reserve_0: U256::from(0),
             reserve_1: U256::from(0),
-            fee_rate: U256::from(300),
+            fee_rate: U256::from(30),
         },
         Pool {
             pool_name: "FUEL/ETH",
@@ -110,7 +110,7 @@ pub fn get_pools() -> Vec<Pool> {
             to: eth_asset_id,
             reserve_0: U256::from(0),
             reserve_1: U256::from(0),
-            fee_rate: U256::from(300),
+            fee_rate: U256::from(30),
         },
         Pool {
             pool_name: "FUEL/USDC",
@@ -118,7 +118,7 @@ pub fn get_pools() -> Vec<Pool> {
             to: usdc_asset_id,
             reserve_0: U256::from(0),
             reserve_1: U256::from(0),
-            fee_rate: U256::from(300),
+            fee_rate: U256::from(30),
         },
     ]
 }

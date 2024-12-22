@@ -21,6 +21,7 @@ use fuels::{
     types::transaction::TxPolicies,
 };
 use futures::StreamExt;
+use log::debug;
 use mira_v1::interface::PoolMetadata;
 use pangea_client::{
     core::types::ChainId, provider::FuelProvider, query::Bound, requests::fuel::GetFuelLogsRequest,
@@ -70,7 +71,7 @@ pub async fn stream_mira_events_pangea(tx: Sender<Event>) -> Result<(), ()> {
                     asset_0_out: event.asset_0_out,
                     asset_1_out: event.asset_1_out,
                 };
-                println!("Swap {:?} {:?}", data.block_number, Local::now());
+                debug!("Swap {:?} {:?}", data.block_number, Local::now());
                 let _ = tx.send(Event::MiraSwap(event_with_tx));
             }
             MIRA_MINT_EVENT_ID => {
@@ -84,7 +85,7 @@ pub async fn stream_mira_events_pangea(tx: Sender<Event>) -> Result<(), ()> {
                     asset_0_in: event.asset_0_in,
                     asset_1_in: event.asset_1_in,
                 };
-                println!("Mint {:?} {:?}", event_with_tx, Local::now());
+                debug!("Mint {:?} {:?}", event_with_tx, Local::now());
                 let _ = tx.send(Event::MiraMint(event_with_tx));
             }
             MIRA_BURN_EVENT_ID => {
@@ -98,11 +99,11 @@ pub async fn stream_mira_events_pangea(tx: Sender<Event>) -> Result<(), ()> {
                     asset_0_out: event.asset_0_out,
                     asset_1_out: event.asset_1_out,
                 };
-                println!("Burn {:?} {:?}", event_with_tx, Local::now());
+                debug!("Burn {:?} {:?}", event_with_tx, Local::now());
                 let _ = tx.send(Event::MiraBurn(event_with_tx));
             }
             _ => {
-                println!(
+                debug!(
                     "Not Relevant {:?} {:?}",
                     data.transaction_hash,
                     Local::now()
@@ -132,7 +133,7 @@ pub async fn sync_state(triton: &mut triton::Triton, wallet: WalletUnlocked) {
     // Get pool IDs and add them to pool manager
     let pools = get_pools();
 
-    println!("pools: {:#?}", pools.len());
+    debug!("pools: {:#?}", pools.len());
 
     for pool in pools.iter() {
         let fee_call_handler = contract_methods
@@ -213,16 +214,15 @@ pub async fn sync_state(triton: &mut triton::Triton, wallet: WalletUnlocked) {
         fee_results.value.10,
     ];
 
-    println!("metadata_vec: {:?}", metadata_vec);
-    println!("fee_vec: {:?}", fee_vec);
+    debug!("metadata_vec: {:#?}", metadata_vec);
+    debug!("fee_vec: {:?}", fee_vec);
 
     // Process results and update pool states
-    for ((i, metadata_opt), fees) in metadata_vec
+    for ((i, metadata_opt), _) in metadata_vec
         .into_iter()
         .enumerate()
         .zip(fee_vec.into_iter())
     {
-        let pool = &pools[i];
         if let Some(metadata) = metadata_opt {
             if let Some(pool) = triton.pools.get_mut(&i) {
                 pool.borrow_mut().reserve_0 = U256::from(metadata.reserve_0);
@@ -230,5 +230,5 @@ pub async fn sync_state(triton: &mut triton::Triton, wallet: WalletUnlocked) {
             }
         }
     }
-    println!("{:#?}", triton.pools);
+    debug!("{:#?}", triton.pools);
 }

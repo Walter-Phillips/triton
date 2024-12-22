@@ -1,13 +1,9 @@
-use std::str::FromStr;
-
-use ethers::contract;
+use ethers::utils::format_units;
 use fuels::accounts::provider::Provider;
 use fuels::accounts::wallet::WalletUnlocked;
-use fuels::types::ContractId;
 use log::{error, info};
 use triton::bundle;
 use triton::calc::find_optimal_cycles;
-use triton::constants::CONTRACT_ID;
 use triton::recon::{stream_mira_events_pangea, sync_state};
 use triton::types::Event;
 
@@ -25,13 +21,12 @@ async fn main() {
             .unwrap(),
         Some(Provider::connect("mainnet.fuel.network").await.unwrap()),
     );
-    let contract_id = ContractId::from_str(CONTRACT_ID).unwrap();
 
     sync_state(&mut triton, wallet.clone()).await;
     let event_tx = tx.clone();
     info!("Starting Mira event stream");
     tokio::spawn(async move {
-        if let Err(e) = stream_mira_events_pangea(event_tx).await {
+        if let Err(_) = stream_mira_events_pangea(event_tx).await {
             error!("Error in stream_mira_events");
         }
     });
@@ -48,8 +43,11 @@ async fn main() {
             println!(
                 "Most profitable cycle: {:?} profit as u64: {:?}",
                 cycles[0],
-                cycles[0].profit.as_u64()
+                format_units(cycles[0].profit, 6)
             );
+            bundle::send_multi_hop(&wallet, cycles[0].clone()).await;
+            let elapsed = now.elapsed().as_millis();
+            println!("Cycle execution took {}ms", elapsed);
         }
     }
 }

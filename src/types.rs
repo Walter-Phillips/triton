@@ -26,6 +26,8 @@ pub struct Pool {
 }
 
 #[derive(Debug, Deserialize)]
+
+#[allow(dead_code)]
 pub struct PangeaLogData {
     chain: u64,
     pub block_number: String,     // Hexadecimal, represented as a String
